@@ -56,7 +56,6 @@ public class DeadlockMovementTraining : DeadworksPluginBase
         ConVar.Find("citadel_voice_all_talk")?.SetInt(1);
         ConVar.Find("citadel_player_starting_gold")?.SetInt(0);
         ConVar.Find("citadel_allow_purchasing_anywhere")?.SetInt(1);
-        ConVar.Find("ai_disable")?.SetInt(1);
     }
 
     [ChatCommand("hello")]
@@ -131,22 +130,105 @@ public class DeadlockMovementTraining : DeadworksPluginBase
         var pawn = args.Userid?.As<CCitadelPlayerPawn>();
         if (pawn == null) return HookResult.Continue;
 
-        ResetHero(pawn);
+        pawn.SetCurrency(ECurrencyType.EGold, 50000);
         var spawn = GetRandomSpawn();
 
         pawn.Teleport(position: spawn, angles: null, velocity: null);
+        ScheduleFullHeal(pawn);
         return HookResult.Continue;
     }
 
-    void ResetHero(CCitadelPlayerPawn pawn)
+    [GameEventHandler("player_hero_changed")]
+    public HookResult OnHeroChanged(GameEvent args)
     {
+        var pawn = args.GetPlayerPawn("player")?.As<CCitadelPlayerPawn>();
+        if (pawn == null) return HookResult.Handled;
+
         pawn.ResetHero();
         pawn.SetCurrency(ECurrencyType.EGold, 50000);
-        pawn.Health = pawn.MaxHealth;
+        pawn.ModifyCurrency(ECurrencyType.EAbilityPoints, 17, ECurrencySource.ECheats, false, false, false);
+        ScheduleFullHeal(pawn);
+
+        return HookResult.Handled;
+    }
+
+    private void ScheduleFullHeal(CCitadelPlayerPawn pawn)
+    {
+        IHandle? timer = null;
+        timer = Timer.Every(1.Ticks(), () =>
+        {
+            if (!pawn.IsValid)
+            {
+                timer?.Cancel();
+                return;
+            }
+
+            if (pawn.MaxHealth <= 0)
+                return;
+
+            pawn.Health = pawn.MaxHealth;
+            timer?.Cancel();
+        });
     }
 
     private Vector3 GetRandomSpawn()
     {
         return _spawnPoints[Random.Shared.Next(_spawnPoints.Length)];
+    }
+    
+    string[] _garbageEntities = {
+        "npc_trooper_boss",
+        "npc_boss_tier2",
+        "npc_boss_tier3",
+        "baseanimgraph",
+        "destroyable_building",
+        "npc_base_defense_sentry",
+        "citadel_herotest_orbspawner",
+        "npc_barrack_boss",
+        "info_neutral_trooper_camp",
+        "npc_trooper",
+        "npc_super_neutral",
+        "npc_trooper_neutral",
+        "npc_neutral_sinners_sacrifice",
+        "trigger_item_shop",
+        "citadel_trigger_shop_tunnel",
+        "trigger_item_shop_safe_zone",
+        "func_regenerate",
+        "citadel_item_pickup_idol",
+        "citadel_item_powerup_spawner",
+        "citadel_punchable_powerup",
+        "citadel_breakable_prop",
+        "item_crate_spawn",
+        "citadel_zap_trigger",
+        "npc_neutral_bug",
+    };
+    string[] _garbageEntityNames = {
+        "amber_shrine_east",
+        "amber_shrine_west",
+        "amber_effigy_brush",
+        "sapphire_shrine_east",
+        "sapphire_shrine_west",
+        "sapphire_effigy_brush",
+        "sapphire_watcher_broadway_left",
+        "sapphire_watcher_broadway_right",
+        "sapphire_watcher_york_right",
+        "sapphire_watcher_york_left",
+        "sapphire_watcher_park_left",
+        "sapphire_watcher_park_right",
+        "amber_watcher_broadway_left",
+        "amber_watcher_broadway_right",
+        "amber_watcher_york_right",
+        "amber_watcher_york_left",
+        "amber_watcher_park_left",
+        "amber_watcher_park_right",
+    };
+
+    public override void OnEntitySpawned(EntitySpawnedEvent args)
+    {
+        if (_garbageEntities.Contains(args.Entity.DesignerName))
+            args.Entity.Remove();
+
+        if (_garbageEntityNames.Contains(args.Entity.Name))
+            args.Entity.Remove();
     }
 }
